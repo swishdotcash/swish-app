@@ -13,6 +13,8 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { PrivyProvider } from "@/providers/PrivyProvider";
+import { AuthProvider } from "@/providers/AuthProvider";
 import { Logo } from "@/components/Logo";
 import { Footer } from "@/components/Footer";
 
@@ -42,21 +44,25 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <View className="flex-1 bg-light">
-          {/* Header */}
-          <View className="items-center pt-14 pb-4">
-            <Logo />
-          </View>
+        <PrivyProvider>
+          <AuthProvider>
+            <StatusBar style="dark" />
+            <View className="flex-1 bg-light">
+              {/* Header */}
+              <View className="items-center pt-14 pb-4">
+                <Logo />
+              </View>
 
-          {/* Main Content */}
-          <View className="flex-1">
-            <Slot />
-          </View>
+              {/* Main Content */}
+              <View className="flex-1">
+                <Slot />
+              </View>
 
-          {/* Footer Navigation */}
-          <Footer />
-        </View>
+              {/* Footer Navigation */}
+              <Footer />
+            </View>
+          </AuthProvider>
+        </PrivyProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
