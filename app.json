@@ -36,7 +36,9 @@
             "kotlinVersion": "2.0.21"
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "extra": {
       "router": {
