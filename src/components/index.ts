@@ -5,4 +5,6 @@ export { ActionButton } from "./ActionButton";
 export { Spinner } from "./Spinner";
 export { SendModal } from "./SendModal";
 export { ReceiveModal } from "./ReceiveModal";
+export { SendClaimModal } from "./SendClaimModal";
+export { ClaimPassphraseModal } from "./ClaimPassphraseModal";
 export { QRScanner } from "./QRScanner";

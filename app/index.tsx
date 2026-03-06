@@ -18,7 +18,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import * as Clipboard from "expo-clipboard";
-import { NumberPad, ActionButton, Spinner, SendModal, ReceiveModal } from "@/components";
+import { NumberPad, ActionButton, Spinner, SendModal, ReceiveModal, SendClaimModal } from "@/components";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/providers/AuthProvider";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
@@ -58,6 +58,7 @@ export default function HomeScreen() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [showSendClaimModal, setShowSendClaimModal] = useState(false);
 
   const isXUser = authMethod === "twitter";
   const showSignModal = isXUser && authenticated && !signature && !!address && !!signError;
@@ -369,7 +370,7 @@ export default function HomeScreen() {
         amount={amount}
         onSendViaClaim={() => {
           setShowSendModal(false);
-          // TODO: Open SendClaimModal (feat/send-claim branch)
+          setShowSendClaimModal(true);
         }}
         signature={signature}
         senderPublicKey={address}
@@ -382,6 +383,18 @@ export default function HomeScreen() {
         amount={amount}
         signature={signature}
         requesterAddress={address}
+      />
+
+      {/* Send Claim Modal */}
+      <SendClaimModal
+        visible={showSendClaimModal}
+        onClose={() => {
+          setShowSendClaimModal(false);
+          refetchUSDCBalance();
+        }}
+        amount={amount}
+        signature={signature}
+        senderPublicKey={address}
       />
 
       {/* Mandatory Sign-In Modal for Twitter Users */}

@@ -6,3 +6,4 @@ export { useUserRegistration } from "./useUserRegistration";
 export { useFee } from "./useFee";
 export { useSendTransaction } from "./useSendTransaction";
 export { useFulfillRequest } from "./useFulfillRequest";
+export { useSendClaimTransaction } from "./useSendClaimTransaction";

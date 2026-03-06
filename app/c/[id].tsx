@@ -4,52 +4,54 @@ import { useLocalSearchParams } from "expo-router";
 import { useAuth } from "@/providers/AuthProvider";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useFee } from "@/hooks/useFee";
-import { useFulfillRequest } from "@/hooks/useFulfillRequest";
-import { Spinner } from "@/components";
+import { Spinner, ClaimPassphraseModal } from "@/components";
 import { formatNumber } from "@/utils";
 import { API_BASE_URL } from "@/constants/api";
 
-import SendIcon from "@/assets/send.svg";
+import ReceiveIcon from "@/assets/receive.svg";
 import SuccessAltIcon from "@/assets/success-alt.svg";
 import SolIcon from "@/assets/sol-icon.svg";
 import XIcon from "@/assets/x-icon.svg";
 
-interface RequestData {
+interface ClaimData {
   id: string;
   amount: number;
   token: string;
   status: string;
   message: string | null;
   createdAt: string;
-  receiverAddress?: string;
+  isSender: boolean;
 }
 
 type PageState =
   | "loading"
   | "ready"
-  | "processing"
   | "success"
   | "error"
   | "not_found"
-  | "already_paid"
-  | "cancelled"
-  | "cancelling";
+  | "already_claimed"
+  | "reclaiming"
+  | "reclaimed";
 
-export default function RequestPage() {
+export default function ClaimPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authenticated, address, loginWithTwitter, connectWallet } = useAuth();
   const { signature } = useSessionSignature();
   const { baseFee, feePercent } = useFee();
-  const { fulfill } = useFulfillRequest();
-  const [requestData, setRequestData] = useState<RequestData | null>(null);
+  const [claimData, setClaimData] = useState<ClaimData | null>(null);
   const [pageState, setPageState] = useState<PageState>("loading");
+  const [showPassphraseModal, setShowPassphraseModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
-    async function fetchRequestData() {
+    async function fetchClaimData() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/request/${id}`);
+        const url = address
+          ? `${API_BASE_URL}/api/send_claim/${id}?wallet=${address}`
+          : `${API_BASE_URL}/api/send_claim/${id}`;
+
+        const res = await fetch(url);
 
         if (res.status === 404) {
           setPageState("not_found");
@@ -57,67 +59,46 @@ export default function RequestPage() {
         }
 
         if (!res.ok) {
-          throw new Error("Failed to fetch request data");
+          throw new Error("Failed to fetch claim data");
         }
 
-        const data: RequestData = await res.json();
-        setRequestData(data);
+        const data: ClaimData = await res.json();
+        setClaimData(data);
 
-        if (data.status === "settled") {
-          setPageState("already_paid");
-        } else if (data.status === "cancelled") {
-          setPageState("cancelled");
+        if (data.status === "settled" || data.status === "cancelled") {
+          setPageState("already_claimed");
         } else {
           setPageState("ready");
         }
       } catch (error) {
-        console.error("Error fetching request:", error);
+        console.error("Error fetching claim:", error);
         setPageState("error");
       }
     }
 
-    if (id) fetchRequestData();
-  }, [id]);
+    if (id) fetchClaimData();
+  }, [id, address]);
 
-  const isRequestor =
-    authenticated &&
-    address &&
-    requestData?.receiverAddress &&
-    address.toLowerCase() === requestData.receiverAddress.toLowerCase();
-
-  const handlePay = async () => {
-    if (!authenticated) {
+  const handleClaim = () => {
+    if (!authenticated || !address) {
       setShowLoginModal(true);
       return;
     }
-
-    if (!signature || !address) return;
-
-    setPageState("processing");
-    setErrorMessage(null);
-
-    try {
-      await fulfill({
-        activityId: id!,
-        signature,
-        payerPublicKey: address,
-      });
-      setPageState("success");
-    } catch (error: any) {
-      console.error("Pay request failed:", error);
-      setErrorMessage(error.message || "Something went wrong");
-      setPageState("error");
-    }
+    setShowPassphraseModal(true);
   };
 
-  const handleCancel = async () => {
+  const handleClaimSuccess = () => {
+    setPageState("success");
+  };
+
+  const handleReclaim = async () => {
     if (!signature || !address) return;
 
-    setPageState("cancelling");
+    setPageState("reclaiming");
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/request/cancel`, {
+      const res = await fetch(`${API_BASE_URL}/api/send_claim/reclaim`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -125,26 +106,21 @@ export default function RequestPage() {
         },
         body: JSON.stringify({
           activityId: id,
-          requesterAddress: address,
+          senderPublicKey: address,
         }),
       });
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to cancel request");
+        throw new Error(errorData.error || "Failed to reclaim");
       }
 
-      setPageState("cancelled");
+      setPageState("reclaimed");
     } catch (error: any) {
-      console.error("Cancel request failed:", error);
+      console.error("Reclaim failed:", error);
       setErrorMessage(error.message || "Something went wrong");
       setPageState("error");
     }
-  };
-
-  const formatAddress = (addr: string) => {
-    if (addr.length <= 10) return addr;
-    return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
   };
 
   if (pageState === "loading") {
@@ -155,7 +131,7 @@ export default function RequestPage() {
           className="mt-4 text-dark/70"
           style={{ fontFamily: "Jost_400Regular" }}
         >
-          Loading request...
+          Loading claim...
         </Text>
       </View>
     );
@@ -171,7 +147,7 @@ export default function RequestPage() {
           <Text className="text-red-500 text-2xl">!</Text>
         </View>
         <Text className="text-dark" style={{ fontFamily: "Jost_500Medium" }}>
-          Request not found
+          Claim link not found
         </Text>
         <Text
           className="text-dark/60 text-sm mt-2"
@@ -183,7 +159,7 @@ export default function RequestPage() {
     );
   }
 
-  if (pageState === "already_paid") {
+  if (pageState === "already_claimed") {
     return (
       <View className="flex-1 items-center justify-center px-4">
         <View
@@ -193,49 +169,13 @@ export default function RequestPage() {
           <Text className="text-yellow-600 text-2xl">!</Text>
         </View>
         <Text className="text-dark" style={{ fontFamily: "Jost_500Medium" }}>
-          Already paid
+          Already claimed
         </Text>
         <Text
           className="text-dark/60 text-sm mt-2"
           style={{ fontFamily: "Jost_400Regular" }}
         >
-          This request has already been fulfilled.
-        </Text>
-      </View>
-    );
-  }
-
-  if (pageState === "cancelled") {
-    return (
-      <View className="flex-1 items-center justify-center px-4">
-        <View
-          className="w-12 h-12 rounded-full items-center justify-center mb-4"
-          style={{ backgroundColor: "rgba(239, 68, 68, 0.1)" }}
-        >
-          <Text style={{ color: "#CB0000", fontSize: 24 }}>!</Text>
-        </View>
-        <Text className="text-dark" style={{ fontFamily: "Jost_500Medium" }}>
-          Request Cancelled
-        </Text>
-        <Text
-          className="text-dark/60 text-sm mt-2"
-          style={{ fontFamily: "Jost_400Regular" }}
-        >
-          This payment request has been cancelled.
-        </Text>
-      </View>
-    );
-  }
-
-  if (pageState === "processing" || pageState === "cancelling") {
-    return (
-      <View className="flex-1 items-center justify-center">
-        <Spinner size={48} color="#121212" />
-        <Text
-          className="mt-4 text-dark/70"
-          style={{ fontFamily: "Jost_400Regular" }}
-        >
-          {pageState === "cancelling" ? "Cancelling request..." : "Processing payment..."}
+          This claim link has already been used.
         </Text>
       </View>
     );
@@ -278,132 +218,170 @@ export default function RequestPage() {
     );
   }
 
-  if (!requestData) return null;
+  if (pageState === "reclaiming") {
+    return (
+      <View className="flex-1 items-center justify-center">
+        <Spinner size={48} color="#121212" />
+        <Text
+          className="mt-4 text-dark/70"
+          style={{ fontFamily: "Jost_400Regular" }}
+        >
+          Reclaiming funds...
+        </Text>
+      </View>
+    );
+  }
 
-  const partnerFee = baseFee + requestData.amount * feePercent;
-  const requestorReceives = requestData.amount - partnerFee;
+  if (pageState === "reclaimed") {
+    return (
+      <View className="flex-1 items-center justify-center px-4">
+        <View
+          className="w-12 h-12 rounded-full items-center justify-center mb-4"
+          style={{ backgroundColor: "rgba(0, 136, 52, 0.1)" }}
+        >
+          <SuccessAltIcon width={24} height={24} />
+        </View>
+        <Text className="text-dark" style={{ fontFamily: "Jost_500Medium" }}>
+          Funds Reclaimed
+        </Text>
+        <Text
+          className="text-dark/60 text-sm mt-2"
+          style={{ fontFamily: "Jost_400Regular" }}
+        >
+          The funds have been returned to your wallet.
+        </Text>
+      </View>
+    );
+  }
+
+  if (!claimData) return null;
+
+  const partnerFee = baseFee + claimData.amount * feePercent;
+  const youReceive = claimData.amount - partnerFee;
 
   return (
     <>
-    <ScrollView
-      contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 16 }}
-    >
-      {/* Amount Display */}
-      <View className="items-center mb-8">
-        <Text
-          className="text-6xl text-dark text-center"
-          style={{ fontFamily: "Jost_300Light" }}
-        >
-          {requestData.amount}
-        </Text>
-        {requestData.message && (
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 16 }}
+      >
+        {/* Amount Display */}
+        <View className="items-center mb-8">
           <Text
-            className="mt-2 text-dark/50 text-sm"
-            style={{ fontFamily: "Jost_400Regular" }}
+            className="text-6xl text-dark text-center"
+            style={{ fontFamily: "Jost_300Light" }}
           >
-            {requestData.message}
+            {claimData.amount}
           </Text>
-        )}
-      </View>
+          {claimData.message && (
+            <Text
+              className="mt-2 text-dark/50 text-sm"
+              style={{ fontFamily: "Jost_400Regular" }}
+            >
+              {claimData.message}
+            </Text>
+          )}
+        </View>
 
-      {/* Details */}
-      <View className="w-full max-w-[320px] self-center gap-2 mb-8">
-        {requestData.receiverAddress && (
+        {/* Details */}
+        <View className="w-full max-w-[320px] self-center gap-2 mb-8">
           <View className="flex-row justify-between">
             <Text className="text-dark" style={{ fontFamily: "Jost_400Regular" }}>
-              Requested by
+              Partner fees
             </Text>
             <Text className="text-dark" style={{ fontFamily: "Jost_400Regular" }}>
-              {formatAddress(requestData.receiverAddress)}
+              ~{formatNumber(partnerFee)} USDC
             </Text>
           </View>
-        )}
-        <View className="flex-row justify-between">
-          <Text className="text-dark" style={{ fontFamily: "Jost_400Regular" }}>
-            Partner fees
-          </Text>
-          <Text className="text-dark" style={{ fontFamily: "Jost_400Regular" }}>
-            ~{formatNumber(partnerFee)} USDC
-          </Text>
+          <View className="flex-row justify-between">
+            <Text className="text-dark" style={{ fontFamily: "Jost_400Regular" }}>
+              {claimData.isSender ? "You get back" : "You receive"}
+            </Text>
+            <Text className="text-dark" style={{ fontFamily: "Jost_400Regular" }}>
+              ~{formatNumber(youReceive)} USDC
+            </Text>
+          </View>
+          <View className="flex-row justify-between">
+            <Text className="text-dark" style={{ fontFamily: "Jost_600SemiBold" }}>
+              Total
+            </Text>
+            <Text className="text-dark" style={{ fontFamily: "Jost_600SemiBold" }}>
+              {formatNumber(claimData.amount)} USDC
+            </Text>
+          </View>
         </View>
-        <View className="flex-row justify-between">
-          <Text className="text-dark" style={{ fontFamily: "Jost_400Regular" }}>
-            {isRequestor ? "You receive" : "They receive"}
-          </Text>
-          <Text className="text-dark" style={{ fontFamily: "Jost_400Regular" }}>
-            ~{formatNumber(requestorReceives)} USDC
-          </Text>
-        </View>
-        <View className="flex-row justify-between">
-          <Text className="text-dark" style={{ fontFamily: "Jost_600SemiBold" }}>
-            Total
-          </Text>
-          <Text className="text-dark" style={{ fontFamily: "Jost_600SemiBold" }}>
-            {formatNumber(requestData.amount)} USDC
-          </Text>
-        </View>
-      </View>
 
-      {/* Pay Button (for payers) */}
-      {pageState === "ready" && !isRequestor && (
-        <Pressable
-          onPress={handlePay}
-          className="w-full max-w-[320px] self-center h-12 bg-dark rounded-full items-center justify-center"
-          style={{
-            shadowColor: "#121212",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
-            elevation: 4,
-          }}
-        >
-          <SendIcon width={24} height={24} />
-        </Pressable>
-      )}
-
-      {/* Cancel Button (for requestor) */}
-      {pageState === "ready" && isRequestor && (
-        <Pressable
-          onPress={handleCancel}
-          className="w-full max-w-[320px] self-center h-12 bg-light rounded-full items-center justify-center"
-          style={{
-            borderWidth: 1,
-            borderColor: "#CB0000",
-            shadowColor: "#CB0000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 2,
-          }}
-        >
-          <Text
-            style={{ color: "#CB0000", fontFamily: "Jost_600SemiBold" }}
+        {/* Claim Button (for receivers) */}
+        {pageState === "ready" && !claimData.isSender && (
+          <Pressable
+            onPress={handleClaim}
+            className="w-full max-w-[320px] self-center h-12 bg-dark rounded-full items-center justify-center"
+            style={{
+              shadowColor: "#121212",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 4,
+            }}
           >
-            Cancel Request
-          </Text>
-        </Pressable>
+            <ReceiveIcon width={24} height={24} />
+          </Pressable>
+        )}
+
+        {/* Reclaim Button (for sender) */}
+        {pageState === "ready" && claimData.isSender && (
+          <Pressable
+            onPress={handleReclaim}
+            className="w-full max-w-[320px] self-center h-12 bg-light rounded-full items-center justify-center"
+            style={{
+              borderWidth: 1,
+              borderColor: "#CB0000",
+              shadowColor: "#CB0000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
+            <Text
+              style={{ color: "#CB0000", fontFamily: "Jost_600SemiBold" }}
+            >
+              Reclaim
+            </Text>
+          </Pressable>
+        )}
+
+        {/* Success State */}
+        {pageState === "success" && (
+          <Pressable
+            className="w-full max-w-[320px] self-center h-12 bg-light rounded-full items-center justify-center"
+            style={{
+              borderWidth: 1,
+              borderColor: "rgba(18, 18, 18, 0.7)",
+              shadowColor: "#121212",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 4,
+            }}
+          >
+            <SuccessAltIcon width={24} height={24} />
+          </Pressable>
+        )}
+      </ScrollView>
+
+      {/* Passphrase Modal */}
+      {claimData && address && (
+        <ClaimPassphraseModal
+          visible={showPassphraseModal}
+          onClose={() => setShowPassphraseModal(false)}
+          amount={claimData.amount}
+          activityId={claimData.id}
+          receiverAddress={address}
+          onSuccess={handleClaimSuccess}
+        />
       )}
 
-      {/* Success State */}
-      {pageState === "success" && (
-        <Pressable
-          className="w-full max-w-[320px] self-center h-12 bg-light rounded-full items-center justify-center"
-          style={{
-            borderWidth: 1,
-            borderColor: "rgba(18, 18, 18, 0.7)",
-            shadowColor: "#121212",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
-            elevation: 4,
-          }}
-        >
-          <SuccessAltIcon width={24} height={24} />
-        </Pressable>
-      )}
-    </ScrollView>
-
-    {/* Login Modal */}
+      {/* Login Modal */}
       <Modal
         visible={showLoginModal}
         transparent

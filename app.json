@@ -34,6 +34,11 @@
               "scheme": "https",
               "host": "swish.cash",
               "pathPrefix": "/r/"
+            },
+            {
+              "scheme": "https",
+              "host": "swish.cash",
+              "pathPrefix": "/c/"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
