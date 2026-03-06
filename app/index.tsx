@@ -18,7 +18,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import * as Clipboard from "expo-clipboard";
-import { NumberPad, ActionButton, Spinner } from "@/components";
+import { NumberPad, ActionButton, Spinner, SendModal } from "@/components";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/providers/AuthProvider";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
@@ -56,6 +56,7 @@ export default function HomeScreen() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
 
   const isXUser = authMethod === "twitter";
   const showSignModal = isXUser && authenticated && !signature && !!address && !!signError;
@@ -89,7 +90,11 @@ export default function HomeScreen() {
     }
     if (!hasValidAmount) return;
     if (action === "send" && exceedsBalance) return;
-    // TODO: Open send/receive modals (feat/send, feat/request branches)
+
+    if (action === "send") {
+      setShowSendModal(true);
+    }
+    // TODO: Receive modal (feat/request branch)
   };
 
   const handleCopyAddress = async () => {
@@ -350,6 +355,22 @@ export default function HomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Send Modal */}
+      <SendModal
+        visible={showSendModal}
+        onClose={() => {
+          setShowSendModal(false);
+          refetchUSDCBalance();
+        }}
+        amount={amount}
+        onSendViaClaim={() => {
+          setShowSendModal(false);
+          // TODO: Open SendClaimModal (feat/send-claim branch)
+        }}
+        signature={signature}
+        senderPublicKey={address}
+      />
 
       {/* Mandatory Sign-In Modal for Twitter Users */}
       <Modal
