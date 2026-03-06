@@ -7,3 +7,4 @@ export { useFee } from "./useFee";
 export { useSendTransaction } from "./useSendTransaction";
 export { useFulfillRequest } from "./useFulfillRequest";
 export { useSendClaimTransaction } from "./useSendClaimTransaction";
+export { useWithdrawTransaction } from "./useWithdrawTransaction";

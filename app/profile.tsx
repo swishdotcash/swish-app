@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, ScrollView, Modal } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { Spinner } from "@/components";
+import { Spinner, WithdrawModal } from "@/components";
 import { useAuth } from "@/providers/AuthProvider";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
@@ -68,6 +68,7 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
   const isXUser = authMethod === "twitter";
 
@@ -271,6 +272,7 @@ export default function ProfileScreen() {
   const totalUSD = (usdcBalance || 0) + (solBalanceUSD || 0);
 
   return (
+    <>
     <View className="flex-1 items-center justify-center px-4">
       {/* Header: Address + X handle */}
       <View className="w-full max-w-[320px] mb-6">
@@ -545,7 +547,7 @@ export default function ProfileScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
-                // TODO: Withdraw modal (feat/withdraw)
+                setShowWithdrawModal(true);
               }}
               className="flex-1 h-10 bg-dark rounded-full items-center justify-center"
               style={{
@@ -635,5 +637,16 @@ export default function ProfileScreen() {
         </ScrollView>
       )}
     </View>
+
+    <WithdrawModal
+      visible={showWithdrawModal}
+      onClose={() => {
+        setShowWithdrawModal(false);
+      }}
+      usdcBalance={usdcBalance}
+      signature={signature}
+      senderPublicKey={address}
+    />
+    </>
   );
 }
