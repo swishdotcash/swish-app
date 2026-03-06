@@ -38,7 +38,13 @@
         }
       ],
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Swish needs camera access to scan wallet QR codes."
+        }
+      ]
     ],
     "extra": {
       "router": {
