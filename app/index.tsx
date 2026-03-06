@@ -18,7 +18,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import * as Clipboard from "expo-clipboard";
-import { NumberPad, ActionButton, Spinner, SendModal } from "@/components";
+import { NumberPad, ActionButton, Spinner, SendModal, ReceiveModal } from "@/components";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/providers/AuthProvider";
 import { useSessionSignature } from "@/hooks/useSessionSignature";
@@ -57,6 +57,7 @@ export default function HomeScreen() {
   const [copied, setCopied] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
 
   const isXUser = authMethod === "twitter";
   const showSignModal = isXUser && authenticated && !signature && !!address && !!signError;
@@ -94,7 +95,9 @@ export default function HomeScreen() {
     if (action === "send") {
       setShowSendModal(true);
     }
-    // TODO: Receive modal (feat/request branch)
+    if (action === "receive") {
+      setShowReceiveModal(true);
+    }
   };
 
   const handleCopyAddress = async () => {
@@ -370,6 +373,15 @@ export default function HomeScreen() {
         }}
         signature={signature}
         senderPublicKey={address}
+      />
+
+      {/* Receive Modal */}
+      <ReceiveModal
+        visible={showReceiveModal}
+        onClose={() => setShowReceiveModal(false)}
+        amount={amount}
+        signature={signature}
+        requesterAddress={address}
       />
 
       {/* Mandatory Sign-In Modal for Twitter Users */}
