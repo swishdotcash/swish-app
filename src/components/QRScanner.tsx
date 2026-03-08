@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { hapticLight } from "@/utils/haptics";
 
@@ -50,7 +51,7 @@ export function QRScanner({ visible, onScan, onClose }: QRScannerProps) {
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View entering={FadeIn.duration(220)} style={styles.container}>
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
@@ -70,13 +71,26 @@ export function QRScanner({ visible, onScan, onClose }: QRScannerProps) {
       />
 
       {/* Overlay with cutout effect */}
+      {/* Scan frame — corner brackets animate in */}
+      <Animated.View
+        entering={FadeIn.delay(120).duration(300)}
+        style={styles.scanFrame}
+        pointerEvents="none"
+      >
+        {/* Corner brackets */}
+        {["tl", "tr", "bl", "br"].map((corner) => (
+          <View key={corner} style={[styles.corner, styles[corner as keyof typeof styles] as object]} />
+        ))}
+      </Animated.View>
+
+      {/* Overlay controls */}
       <View style={styles.overlay}>
         <Pressable onPress={() => { hapticLight(); onClose(); }} style={styles.closeButton}>
           <Text style={styles.closeText}>Close</Text>
         </Pressable>
         <Text style={styles.hint}>Point at a Solana wallet QR code</Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -152,5 +166,49 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     overflow: "hidden",
+  },
+  scanFrame: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    top: "50%",
+    left: "50%",
+    marginTop: -110,
+    marginLeft: -110,
+  },
+  corner: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderColor: "#fafafa",
+    borderWidth: 2.5,
+  },
+  tl: {
+    top: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 4,
+  },
+  tr: {
+    top: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 4,
+  },
+  bl: {
+    bottom: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 4,
+  },
+  br: {
+    bottom: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 4,
   },
 });

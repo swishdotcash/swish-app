@@ -4,13 +4,13 @@ import {
   Text,
   TextInput,
   Pressable,
-  Modal,
   ScrollView,
   Keyboard,
   Platform,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Spinner } from "./Spinner";
+import { AnimatedBottomSheet } from "./AnimatedBottomSheet";
 import { useFee } from "@/hooks/useFee";
 import { formatNumber } from "@/utils";
 import { API_BASE_URL } from "@/constants/api";
@@ -131,17 +131,7 @@ export function ReceiveModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={handleClose}
-    >
-      <Pressable
-        onPress={handleClose}
-        className="flex-1 bg-black/40 justify-end"
-      >
+    <AnimatedBottomSheet visible={visible} onClose={handleClose}>
         <Pressable onPress={() => {}} className="bg-light rounded-t-3xl">
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -405,7 +395,6 @@ export function ReceiveModal({
             )}
           </ScrollView>
         </Pressable>
-      </Pressable>
-    </Modal>
+    </AnimatedBottomSheet>
   );
 }

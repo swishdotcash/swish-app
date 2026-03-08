@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, Pressable, Modal } from "react-native";
+import { View, Text, Pressable } from "react-native";
+import { AnimatedBottomSheet } from "./AnimatedBottomSheet";
 import * as Clipboard from "expo-clipboard";
 import QRCodeStyled from "react-native-qrcode-styled";
 
@@ -33,18 +34,8 @@ export function DepositModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={handleClose}
-    >
-      <Pressable
-        onPress={handleClose}
-        className="flex-1 bg-black/40 justify-end"
-      >
-        <Pressable onPress={() => {}} className="bg-light rounded-t-3xl px-6 pb-10 pt-6">
+    <AnimatedBottomSheet visible={visible} onClose={handleClose}>
+      <Pressable onPress={() => {}} className="bg-light rounded-t-3xl px-6 pb-10 pt-6">
           {/* Handle bar */}
           <View className="items-center mb-2">
             <View className="w-10 h-1 bg-dark/20 rounded-full mb-4" />
@@ -104,8 +95,7 @@ export function DepositModal({
           >
             Send SOL or USDC to this address
           </Text>
-        </Pressable>
       </Pressable>
-    </Modal>
+    </AnimatedBottomSheet>
   );
 }

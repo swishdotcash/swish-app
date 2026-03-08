@@ -4,13 +4,20 @@ import {
   Text,
   TextInput,
   Pressable,
-  Modal,
   ScrollView,
   Keyboard,
   Platform,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  FadeIn,
+} from "react-native-reanimated";
 import * as Clipboard from "expo-clipboard";
 import { Spinner } from "./Spinner";
+import { AnimatedBottomSheet } from "./AnimatedBottomSheet";
+import { SuccessParticles } from "./SuccessParticles";
 import { useSendClaimTransaction } from "@/hooks/useSendClaimTransaction";
 import { useFee } from "@/hooks/useFee";
 import { formatNumber } from "@/utils";
@@ -46,6 +53,11 @@ export function SendClaimModal({
   const [copied, setCopied] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const { sendClaim } = useSendClaimTransaction();
+
+  const successScale = useSharedValue(0);
+  const successStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: successScale.value }],
+  }));
   const { baseFee, feePercent } = useFee();
 
   const numAmount = parseFloat(amount) || 0;
@@ -90,6 +102,7 @@ export function SendClaimModal({
 
       setClaimLink(result.claimLink);
       setPassphrase(result.passphrase);
+      successScale.value = withSpring(1, { damping: 14, stiffness: 200 });
       setState("success");
       hapticSuccess();
     } catch (error: any) {
@@ -114,6 +127,7 @@ export function SendClaimModal({
     setPassphrase("");
     setErrorMessage(null);
     setCopied(false);
+    successScale.value = 0;
     onClose();
   };
 
@@ -123,17 +137,7 @@ export function SendClaimModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={handleClose}
-    >
-      <Pressable
-        onPress={handleClose}
-        className="flex-1 bg-black/40 justify-end"
-      >
+    <AnimatedBottomSheet visible={visible} onClose={handleClose}>
         <Pressable onPress={() => {}} className="bg-light rounded-t-3xl">
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -279,7 +283,20 @@ export function SendClaimModal({
             )}
 
             {state === "success" && (
-              <View>
+              <Animated.View entering={FadeIn.duration(200)}>
+                {/* Celebration */}
+                <View className="items-center mb-6" style={{ height: 88 }}>
+                  <SuccessParticles />
+                  <Animated.View style={successStyle}>
+                    <View
+                      className="w-16 h-16 rounded-full items-center justify-center"
+                      style={{ backgroundColor: "rgba(18,18,18,0.06)" }}
+                    >
+                      <SuccessIcon width={20} height={10} />
+                    </View>
+                  </Animated.View>
+                </View>
+
                 {/* Success Details */}
                 <View className="gap-2 mb-8">
                   <View className="flex-row justify-between">
@@ -351,7 +368,7 @@ export function SendClaimModal({
                     {copied ? "Copied!" : "Copy Claim Link"}
                   </Text>
                 </Pressable>
-              </View>
+              </Animated.View>
             )}
 
             {state === "error" && (
@@ -396,7 +413,6 @@ export function SendClaimModal({
             )}
           </ScrollView>
         </Pressable>
-      </Pressable>
-    </Modal>
+    </AnimatedBottomSheet>
   );
 }

@@ -4,14 +4,21 @@ import {
   Text,
   TextInput,
   Pressable,
-  Modal,
   ScrollView,
   Keyboard,
   Platform,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  FadeIn,
+} from "react-native-reanimated";
 import { QRScanner } from "./QRScanner";
 import { PublicKey } from "@solana/web3.js";
 import { Spinner } from "./Spinner";
+import { AnimatedBottomSheet } from "./AnimatedBottomSheet";
+import { SuccessParticles } from "./SuccessParticles";
 import { useSendTransaction } from "@/hooks/useSendTransaction";
 import { useFee } from "@/hooks/useFee";
 import { formatNumber } from "@/utils";
@@ -34,8 +41,30 @@ interface SendModalProps {
   senderPublicKey: string | null;
 }
 
-type ModalState = "input" | "loading" | "success" | "error";
+type ModalState = "input" | "confirm" | "loading" | "success" | "error";
 type RecipientType = "wallet" | "x";
+
+function FeeRow({
+  label,
+  value,
+  bold,
+}: {
+  label: string;
+  value: string;
+  bold?: boolean;
+}) {
+  const font = bold ? "Jost_600SemiBold" : "Jost_400Regular";
+  return (
+    <View className="flex-row justify-between">
+      <Text className="text-dark" style={{ fontFamily: font }}>
+        {label}
+      </Text>
+      <Text className="text-dark" style={{ fontFamily: font }}>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
 export function SendModal({
   visible,
@@ -47,6 +76,7 @@ export function SendModal({
 }: SendModalProps) {
   const [walletAddress, setWalletAddress] = useState("");
   const [xHandle, setXHandle] = useState("");
+  const [resolvedAddress, setResolvedAddress] = useState("");
   const [recipientType, setRecipientType] = useState<RecipientType>("wallet");
   const [state, setState] = useState<ModalState>("input");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -56,9 +86,16 @@ export function SendModal({
   const { send } = useSendTransaction();
   const { baseFee, feePercent } = useFee();
 
+  const successScale = useSharedValue(0);
+  const successStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: successScale.value }],
+  }));
+
   useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
     const showSub = Keyboard.addListener(showEvent, (e) => {
       setKeyboardHeight(e.endCoordinates.height);
@@ -95,7 +132,7 @@ export function SendModal({
   const canProceed =
     recipientType === "wallet" ? isValidAddress : isValidXHandle;
 
-  const resolveXHandle = async (): Promise<string | null> => {
+  const resolveXHandleAddr = async (): Promise<string> => {
     setIsResolvingX(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/resolve-x`, {
@@ -103,46 +140,53 @@ export function SendModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ twitterHandle: xHandle }),
       });
-
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to resolve X handle");
       }
-
       const { walletAddress: resolved } = await res.json();
       return resolved;
-    } catch (err: any) {
-      throw err;
     } finally {
       setIsResolvingX(false);
     }
   };
 
-  const handleProceed = async () => {
-    if (!canProceed || !signature || !senderPublicKey) return;
+  // Step 1 → Step 2: resolve if X handle, then show confirm screen
+  const handleReview = async () => {
+    if (!canProceed) return;
 
+    if (recipientType === "x") {
+      setState("loading");
+      try {
+        const resolved = await resolveXHandleAddr();
+        setResolvedAddress(resolved);
+        setState("confirm");
+      } catch (err: any) {
+        setErrorMessage(formatError(err));
+        setState("error");
+        hapticError();
+      }
+    } else {
+      setResolvedAddress(walletAddress);
+      setState("confirm");
+    }
+  };
+
+  // Step 2: execute the send
+  const handleSend = async () => {
+    if (!signature || !senderPublicKey) return;
     setState("loading");
     setErrorMessage(null);
 
     try {
-      let receiverAddress = walletAddress;
-
-      if (recipientType === "x") {
-        const resolved = await resolveXHandle();
-        if (!resolved) {
-          throw new Error("Could not resolve X handle to wallet address");
-        }
-        receiverAddress = resolved;
-        setWalletAddress(resolved);
-      }
-
       await send({
-        receiverAddress,
+        receiverAddress: resolvedAddress,
         amount: numAmount,
         token: "USDC",
         signature,
         senderPublicKey,
       });
+      successScale.value = withSpring(1, { damping: 14, stiffness: 200 });
       setState("success");
       hapticSuccess();
     } catch (error: any) {
@@ -157,10 +201,12 @@ export function SendModal({
     setState("input");
     setWalletAddress("");
     setXHandle("");
+    setResolvedAddress("");
     setRecipientType("wallet");
     setErrorMessage(null);
     setIsResolvingX(false);
     setShowScanner(false);
+    successScale.value = 0;
     onClose();
   };
 
@@ -169,43 +215,28 @@ export function SendModal({
     setShowScanner(false);
   }, []);
 
-  const handleRetry = () => {
-    setState("input");
-    setErrorMessage(null);
-  };
-
-  const formatAddress = (address: string) => {
-    if (address.length <= 10) return address;
-    return `${address.slice(0, 4)}...${address.slice(-4)}`;
+  const formatAddress = (addr: string) => {
+    if (addr.length <= 10) return addr;
+    return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
   };
 
   const displayRecipient =
     recipientType === "x" && xHandle
       ? `@${xHandle}`
-      : formatAddress(walletAddress);
+      : formatAddress(resolvedAddress || walletAddress);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={handleClose}
-    >
-        <Pressable
-          onPress={handleClose}
-          className="flex-1 bg-black/40 justify-end"
-        >
-          <Pressable onPress={() => {}} className="bg-light rounded-t-3xl">
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              bounces={false}
-              contentContainerStyle={{
-                paddingHorizontal: 24,
-                paddingBottom: keyboardHeight > 0 ? keyboardHeight + 60 : 40,
-                paddingTop: 24,
-              }}
-            >
+      <AnimatedBottomSheet visible={visible} onClose={handleClose}>
+        <Pressable onPress={() => {}} className="bg-light rounded-t-3xl">
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+            contentContainerStyle={{
+              paddingHorizontal: 24,
+              paddingBottom: keyboardHeight > 0 ? keyboardHeight + 60 : 40,
+              paddingTop: 24,
+            }}
+          >
             {/* Handle bar */}
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-dark/20 rounded-full mb-4" />
@@ -218,16 +249,20 @@ export function SendModal({
                 className="text-2xl text-dark"
                 style={{ fontFamily: "Jost_600SemiBold" }}
               >
-                Send
+                {state === "confirm" ? "Review" : "Send"}
               </Text>
             </View>
 
+            {/* ── STEP 1: INPUT ── */}
             {state === "input" && (
-              <View>
-                {/* Recipient Type Toggle */}
+              <Animated.View entering={FadeIn.duration(180)}>
+                {/* Recipient type toggle */}
                 <View className="flex-row mb-4 bg-dark/5 rounded-full p-1">
                   <Pressable
-                    onPress={() => { hapticLight(); setRecipientType("wallet"); }}
+                    onPress={() => {
+                      hapticLight();
+                      setRecipientType("wallet");
+                    }}
                     className={`flex-1 flex-row items-center justify-center gap-1.5 h-8 rounded-full ${
                       recipientType === "wallet" ? "bg-dark" : ""
                     }`}
@@ -235,9 +270,7 @@ export function SendModal({
                     <SolIcon width={14} height={14} />
                     <Text
                       className={`text-sm ${
-                        recipientType === "wallet"
-                          ? "text-light"
-                          : "text-dark/50"
+                        recipientType === "wallet" ? "text-light" : "text-dark/50"
                       }`}
                       style={{ fontFamily: "Jost_500Medium" }}
                     >
@@ -245,7 +278,10 @@ export function SendModal({
                     </Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => { hapticLight(); setRecipientType("x"); }}
+                    onPress={() => {
+                      hapticLight();
+                      setRecipientType("x");
+                    }}
                     className={`flex-1 flex-row items-center justify-center gap-1.5 h-8 rounded-full ${
                       recipientType === "x" ? "bg-dark" : ""
                     }`}
@@ -266,7 +302,7 @@ export function SendModal({
                   </Pressable>
                 </View>
 
-                {/* Recipient Input */}
+                {/* Address / handle input */}
                 <View className="mb-6">
                   {recipientType === "wallet" ? (
                     <>
@@ -291,7 +327,10 @@ export function SendModal({
                           }}
                         />
                         <Pressable
-                          onPress={() => { hapticLight(); setShowScanner(true); }}
+                          onPress={() => {
+                            hapticLight();
+                            setShowScanner(true);
+                          }}
                           className="w-12 h-12 rounded-full items-center justify-center"
                           style={{
                             borderWidth: 1,
@@ -329,55 +368,19 @@ export function SendModal({
                   )}
                 </View>
 
-                {/* Amount Details */}
+                {/* Fee summary */}
                 <View className="gap-2 mb-8">
-                  <View className="flex-row justify-between">
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      Amount
-                    </Text>
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      {formatNumber(numAmount)} USDC
-                    </Text>
-                  </View>
-                  <View className="flex-row justify-between">
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      Partner Fees
-                    </Text>
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      ~{formatNumber(partnerFee)} USDC
-                    </Text>
-                  </View>
-                  <View className="flex-row justify-between">
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_600SemiBold" }}
-                    >
-                      They Receive
-                    </Text>
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_600SemiBold" }}
-                    >
-                      ~{formatNumber(total)} USDC
-                    </Text>
-                  </View>
+                  <FeeRow label="Amount" value={`${formatNumber(numAmount)} USDC`} />
+                  <FeeRow label="Partner Fees" value={`~${formatNumber(partnerFee)} USDC`} />
+                  <FeeRow label="They Receive" value={`~${formatNumber(total)} USDC`} bold />
                 </View>
 
-                {/* Proceed Button */}
+                {/* Review → */}
                 <Pressable
-                  onPress={() => { hapticLight(); handleProceed(); }}
+                  onPress={() => {
+                    hapticLight();
+                    handleReview();
+                  }}
                   disabled={!canProceed || isResolvingX}
                   className="w-full h-10 bg-dark rounded-full items-center justify-center"
                   style={{
@@ -393,11 +396,10 @@ export function SendModal({
                     className="text-light"
                     style={{ fontFamily: "Jost_600SemiBold" }}
                   >
-                    {isResolvingX ? "Resolving..." : "Proceed"}
+                    Review →
                   </Text>
                 </Pressable>
 
-                {/* Generate Claim Link */}
                 {recipientType === "wallet" && (
                   <Pressable
                     onPress={() => {
@@ -408,100 +410,68 @@ export function SendModal({
                     className="w-full mt-4 items-center"
                   >
                     <Text
-                      className="text-dark/70 text-sm underline"
+                      className="text-dark/50 text-sm"
                       style={{
                         fontFamily: "Jost_400Regular",
+                        textDecorationLine: "underline",
                         textDecorationStyle: "dashed",
                       }}
                     >
-                      Generate a claim link
+                      Generate a claim link instead
                     </Text>
                   </Pressable>
                 )}
-              </View>
+              </Animated.View>
             )}
 
-            {state === "loading" && (
-              <View className="items-center justify-center py-12">
-                <Spinner size={48} color="#121212" />
-                <Text
-                  className="mt-4 text-dark/70"
-                  style={{ fontFamily: "Jost_400Regular" }}
+            {/* ── STEP 2: CONFIRM ── */}
+            {state === "confirm" && (
+              <Animated.View entering={FadeIn.duration(220)}>
+                {/* Recipient card */}
+                <View
+                  className="rounded-2xl p-4 mb-6"
+                  style={{
+                    backgroundColor: "rgba(18,18,18,0.04)",
+                    borderWidth: 1,
+                    borderColor: "rgba(18,18,18,0.07)",
+                  }}
                 >
-                  Processing transaction...
-                </Text>
-              </View>
-            )}
-
-            {state === "success" && (
-              <View>
-                {/* Success Details */}
-                <View className="gap-2 mb-8">
-                  <View className="flex-row justify-between">
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      Sent To
-                    </Text>
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      {displayRecipient}
-                    </Text>
-                  </View>
-                  <View className="flex-row justify-between">
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      Amount
-                    </Text>
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      {formatNumber(numAmount)} USDC
-                    </Text>
-                  </View>
-                  <View className="flex-row justify-between">
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      Partner Fees
-                    </Text>
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_400Regular" }}
-                    >
-                      ~{formatNumber(partnerFee)} USDC
-                    </Text>
-                  </View>
-                  <View className="flex-row justify-between">
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_600SemiBold" }}
-                    >
-                      They Receive
-                    </Text>
-                    <Text
-                      className="text-dark"
-                      style={{ fontFamily: "Jost_600SemiBold" }}
-                    >
-                      ~{formatNumber(total)} USDC
-                    </Text>
-                  </View>
+                  <Text
+                    className="text-xs text-dark/40 mb-1"
+                    style={{ fontFamily: "Jost_400Regular" }}
+                  >
+                    Sending to
+                  </Text>
+                  <Text
+                    className="text-dark"
+                    style={{ fontFamily: "Jost_500Medium" }}
+                  >
+                    {displayRecipient}
+                  </Text>
                 </View>
 
-                {/* Success Button */}
+                {/* Fee breakdown with divider */}
+                <View className="gap-2 mb-8">
+                  <FeeRow label="Amount" value={`${formatNumber(numAmount)} USDC`} />
+                  <FeeRow label="Partner Fees" value={`~${formatNumber(partnerFee)} USDC`} />
+                  <View
+                    style={{
+                      height: 1,
+                      backgroundColor: "rgba(18,18,18,0.08)",
+                      marginVertical: 4,
+                    }}
+                  />
+                  <FeeRow label="They Receive" value={`~${formatNumber(total)} USDC`} bold />
+                </View>
+
+                {/* Send CTA — larger, more prominent */}
                 <Pressable
-                  onPress={() => { hapticLight(); handleClose(); }}
-                  className="w-full h-10 bg-light rounded-full items-center justify-center"
+                  onPress={() => {
+                    hapticLight();
+                    handleSend();
+                  }}
+                  className="w-full h-12 bg-dark rounded-full items-center justify-center mb-3"
                   style={{
-                    borderWidth: 1,
-                    borderColor: "rgba(18, 18, 18, 0.7)",
                     shadowColor: "#121212",
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.15,
@@ -509,11 +479,99 @@ export function SendModal({
                     elevation: 4,
                   }}
                 >
-                  <SuccessAltIcon width={24} height={24} />
+                  <Text
+                    className="text-light"
+                    style={{ fontFamily: "Jost_600SemiBold", fontSize: 16 }}
+                  >
+                    Send {formatNumber(numAmount)} USDC
+                  </Text>
                 </Pressable>
+
+                {/* Back link */}
+                <Pressable
+                  onPress={() => setState("input")}
+                  className="w-full items-center py-2"
+                >
+                  <Text
+                    className="text-dark/40 text-sm"
+                    style={{ fontFamily: "Jost_400Regular" }}
+                  >
+                    ← Back
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            )}
+
+            {/* ── LOADING ── */}
+            {state === "loading" && (
+              <View className="items-center justify-center py-12">
+                <Spinner size={48} color="#121212" />
+                <Text
+                  className="mt-4 text-dark/70"
+                  style={{ fontFamily: "Jost_400Regular" }}
+                >
+                  Processing...
+                </Text>
               </View>
             )}
 
+            {/* ── SUCCESS ── */}
+            {state === "success" && (
+              <Animated.View
+                entering={FadeIn.duration(200)}
+                className="items-center"
+              >
+                {/* Animated checkmark + particles */}
+                <View
+                  className="items-center justify-center mb-6"
+                  style={{ height: 88 }}
+                >
+                  <SuccessParticles />
+                  <Animated.View style={successStyle}>
+                    <View
+                      className="w-16 h-16 rounded-full items-center justify-center"
+                      style={{ backgroundColor: "rgba(18,18,18,0.06)" }}
+                    >
+                      <SuccessAltIcon width={30} height={18} />
+                    </View>
+                  </Animated.View>
+                </View>
+
+                <Text
+                  className="text-dark mb-1"
+                  style={{ fontFamily: "Jost_600SemiBold", fontSize: 20 }}
+                >
+                  Sent
+                </Text>
+                <Text
+                  className="text-dark/50 text-sm text-center mb-8"
+                  style={{ fontFamily: "Jost_400Regular" }}
+                >
+                  {formatNumber(numAmount)} USDC → {displayRecipient}
+                </Text>
+
+                <Pressable
+                  onPress={() => {
+                    hapticLight();
+                    handleClose();
+                  }}
+                  className="w-full h-10 rounded-full items-center justify-center"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "rgba(18, 18, 18, 0.2)",
+                  }}
+                >
+                  <Text
+                    className="text-dark/60"
+                    style={{ fontFamily: "Jost_500Medium" }}
+                  >
+                    Done
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            )}
+
+            {/* ── ERROR ── */}
             {state === "error" && (
               <View className="items-center justify-center py-8">
                 <View
@@ -535,7 +593,11 @@ export function SendModal({
                   {errorMessage || "Something went wrong"}
                 </Text>
                 <Pressable
-                  onPress={() => { hapticLight(); handleRetry(); }}
+                  onPress={() => {
+                    hapticLight();
+                    setState("input");
+                    setErrorMessage(null);
+                  }}
                   className="w-full h-10 bg-dark rounded-full items-center justify-center"
                   style={{
                     shadowColor: "#121212",
@@ -554,16 +616,13 @@ export function SendModal({
                 </Pressable>
               </View>
             )}
-            </ScrollView>
-          </Pressable>
+          </ScrollView>
         </Pressable>
-
-      {/* QR Scanner Overlay */}
-      <QRScanner
-        visible={showScanner}
-        onScan={handleQRScan}
-        onClose={() => setShowScanner(false)}
-      />
-    </Modal>
+        <QRScanner
+          visible={showScanner}
+          onScan={handleQRScan}
+          onClose={() => setShowScanner(false)}
+        />
+      </AnimatedBottomSheet>
   );
 }

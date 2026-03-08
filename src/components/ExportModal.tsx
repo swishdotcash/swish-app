@@ -1,4 +1,5 @@
-import { View, Text, Pressable, Modal } from "react-native";
+import { View, Text, Pressable } from "react-native";
+import { AnimatedBottomSheet } from "./AnimatedBottomSheet";
 import * as WebBrowser from "expo-web-browser";
 import { hapticLight } from "@/utils/haptics";
 
@@ -15,17 +16,8 @@ export function ExportModal({ visible, onClose }: ExportModalProps) {
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable
-        onPress={onClose}
-        className="flex-1 bg-black/40 justify-end"
-      >
-        <Pressable onPress={() => {}} className="bg-light rounded-t-3xl px-6 pb-10 pt-6">
+    <AnimatedBottomSheet visible={visible} onClose={onClose}>
+      <Pressable onPress={() => {}} className="bg-light rounded-t-3xl px-6 pb-10 pt-6">
           <View className="items-center mb-2">
             <View className="w-10 h-1 bg-dark/20 rounded-full mb-6" />
           </View>
@@ -62,8 +54,7 @@ export function ExportModal({ visible, onClose }: ExportModalProps) {
               Open in Browser
             </Text>
           </Pressable>
-        </Pressable>
       </Pressable>
-    </Modal>
+    </AnimatedBottomSheet>
   );
 }

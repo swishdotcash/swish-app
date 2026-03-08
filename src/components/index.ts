@@ -1,4 +1,7 @@
 export { Logo } from "./Logo";
+export { AnimatedBottomSheet } from "./AnimatedBottomSheet";
+export { FeatureCarousel } from "./FeatureCarousel";
+export { SuccessParticles } from "./SuccessParticles";
 export { Footer } from "./Footer";
 export { NumberPad } from "./NumberPad";
 export { ActionButton } from "./ActionButton";

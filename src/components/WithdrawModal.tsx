@@ -4,11 +4,11 @@ import {
   Text,
   TextInput,
   Pressable,
-  Modal,
   ScrollView,
   Keyboard,
   Platform,
 } from "react-native";
+import { AnimatedBottomSheet } from "./AnimatedBottomSheet";
 import { PublicKey } from "@solana/web3.js";
 import { Spinner } from "./Spinner";
 import { QRScanner } from "./QRScanner";
@@ -131,17 +131,7 @@ export function WithdrawModal({
   };
 
   return (
-      <Modal
-        visible={visible}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={handleClose}
-      >
-        <Pressable
-          onPress={handleClose}
-          className="flex-1 bg-black/40 justify-end"
-        >
+      <AnimatedBottomSheet visible={visible} onClose={handleClose}>
           <Pressable onPress={() => {}} className="bg-light rounded-t-3xl">
             <ScrollView
               keyboardShouldPersistTaps="handled"
@@ -426,13 +416,11 @@ export function WithdrawModal({
               )}
             </ScrollView>
           </Pressable>
-        </Pressable>
-      {/* QR Scanner Overlay */}
-      <QRScanner
-        visible={showQRScanner}
-        onScan={handleQRScan}
-        onClose={() => setShowQRScanner(false)}
-      />
-      </Modal>
+        <QRScanner
+          visible={showQRScanner}
+          onScan={handleQRScan}
+          onClose={() => setShowQRScanner(false)}
+        />
+      </AnimatedBottomSheet>
   );
 }
