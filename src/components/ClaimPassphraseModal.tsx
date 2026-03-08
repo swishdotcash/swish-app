@@ -4,12 +4,18 @@ import {
   Text,
   TextInput,
   Pressable,
-  Modal,
   ScrollView,
   Keyboard,
   Platform,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { Spinner } from "./Spinner";
+import { AnimatedBottomSheet } from "./AnimatedBottomSheet";
 import { useFee } from "@/hooks/useFee";
 import { formatNumber } from "@/utils";
 import { API_BASE_URL } from "@/constants/api";
@@ -41,6 +47,24 @@ export function ClaimPassphraseModal({
   const [passphrase, setPassphrase] = useState("");
   const [state, setState] = useState<ModalState>("input");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Shake animation for wrong passphrase
+  const shakeX = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shakeX.value }],
+  }));
+
+  function triggerShake() {
+    shakeX.value = withSequence(
+      withTiming(-9, { duration: 50 }),
+      withTiming(9, { duration: 50 }),
+      withTiming(-7, { duration: 50 }),
+      withTiming(7, { duration: 50 }),
+      withTiming(-4, { duration: 50 }),
+      withTiming(4, { duration: 50 }),
+      withTiming(0, { duration: 40 })
+    );
+  }
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const { baseFee, feePercent } = useFee();
 
@@ -94,6 +118,7 @@ export function ClaimPassphraseModal({
       setErrorMessage(formatError(error));
       setState("error");
       hapticError();
+      triggerShake();
     }
   };
 
@@ -110,17 +135,7 @@ export function ClaimPassphraseModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      statusBarTranslucent
-      onRequestClose={handleClose}
-    >
-      <Pressable
-        onPress={handleClose}
-        className="flex-1 bg-black/40 justify-end"
-      >
+    <AnimatedBottomSheet visible={visible} onClose={handleClose}>
         <Pressable onPress={() => {}} className="bg-light rounded-t-3xl">
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -149,7 +164,7 @@ export function ClaimPassphraseModal({
 
             {state === "input" && (
               <View>
-                {/* Passphrase Input */}
+                {/* Passphrase Input — shakes on wrong passphrase */}
                 <View className="mb-6">
                   <Text
                     className="text-sm text-dark/50 mb-1"
@@ -157,19 +172,24 @@ export function ClaimPassphraseModal({
                   >
                     Enter passphrase
                   </Text>
-                  <TextInput
-                    value={passphrase}
-                    onChangeText={setPassphrase}
-                    placeholder=""
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    className="w-full h-12 px-4 rounded-full text-dark"
-                    style={{
-                      fontFamily: "Jost_400Regular",
-                      borderWidth: 1,
-                      borderColor: "rgba(18, 18, 18, 0.1)",
-                    }}
-                  />
+                  <Animated.View style={shakeStyle}>
+                    <TextInput
+                      value={passphrase}
+                      onChangeText={setPassphrase}
+                      placeholder=""
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      className="w-full h-12 px-4 rounded-full text-dark"
+                      style={{
+                        fontFamily: "Jost_400Regular",
+                        borderWidth: 1,
+                        borderColor:
+                          state === "error"
+                            ? "rgba(239,68,68,0.4)"
+                            : "rgba(18, 18, 18, 0.1)",
+                      }}
+                    />
+                  </Animated.View>
                 </View>
 
                 {/* Amount Details */}
@@ -363,7 +383,6 @@ export function ClaimPassphraseModal({
             )}
           </ScrollView>
         </Pressable>
-      </Pressable>
-    </Modal>
+    </AnimatedBottomSheet>
   );
 }

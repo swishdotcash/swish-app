@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, ScrollView, Modal } from "react-native";
+import { View, Text, Pressable, ScrollView } from "react-native";
+import { AnimatedBottomSheet } from "@/components/AnimatedBottomSheet";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { Spinner, WithdrawModal, DepositModal, ExportModal } from "@/components";
@@ -205,16 +206,7 @@ export default function ProfileScreen() {
         </Pressable>
 
         {/* Login Method Selection Modal */}
-        <Modal
-          visible={showLoginModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowLoginModal(false)}
-        >
-          <Pressable
-            onPress={() => setShowLoginModal(false)}
-            className="flex-1 bg-black/40 justify-end"
-          >
+        <AnimatedBottomSheet visible={showLoginModal} onClose={() => setShowLoginModal(false)}>
             <Pressable
               onPress={() => {}}
               className="bg-light rounded-t-3xl px-6 pb-10 pt-6"
@@ -281,8 +273,7 @@ export default function ProfileScreen() {
                 </Text>
               </Pressable>
             </Pressable>
-          </Pressable>
-        </Modal>
+        </AnimatedBottomSheet>
       </View>
     );
   }
