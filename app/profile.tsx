@@ -80,16 +80,22 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     async function fetchUserData() {
-      if (!address) return;
+      if (!address || !signature) return;
       setIsLoading(true);
       try {
+        // Activity is the sender↔receiver link the privacy rails hide on-chain,
+        // so core no longer serves it on a bare address. The stored session
+        // signature proves we own this one — no prompt; it's already on disk.
         const res = await fetch(
-          `${API_BASE_URL}/api/activity/user?address=${address}`
+          `${API_BASE_URL}/api/activity/user?address=${address}`,
+          { headers: { "X-Session-Signature": signature } }
         );
         if (res.ok) {
           const data = await res.json();
           setStats(data.stats);
           setActivities(data.activities || []);
+        } else {
+          console.error(`Activity fetch rejected (${res.status}).`);
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -98,10 +104,13 @@ export default function ProfileScreen() {
       }
     }
 
-    if (authenticated && address) {
+    // No stored signature yet (never signed on this device) means we can't prove
+    // ownership without a prompt. Home already offers the sign action; until
+    // then the feed stays empty rather than leaking on a bare address.
+    if (authenticated && address && signature) {
       fetchUserData();
     }
-  }, [authenticated, address]);
+  }, [authenticated, address, signature]);
 
   const handleCopyAddress = async () => {
     if (!address) return;
